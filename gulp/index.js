@@ -2,11 +2,29 @@ var gulp = require('gulp'),
     shell = require('shelljs'),
     webdriver = require('../wdio');
 
+// Systems check
 gulp.task('default', function () {
     console.log('Voyager');
 });
+// Install wdio requirements
 gulp.task('init', function () {
     shell.exec('./node_modules/.bin/selenium-standalone install');
+});
+// Make user
+gulp.task('user', function(done) {
+    var astronaut = require('init.js');
+    astronaut.init(function (err) {
+        if (err) console.error(err);
+        done();
+    });
+});
+// Generate results
+gulp.task('results', function(done) {
+    var defaultIndex = require('../templates/default.js');
+    defaultIndex.templatize(function (err) {
+        if (err) console.error(err);
+        done();
+    });
 });
 // Start selenium, after running in console, open a new tab/window
 gulp.task('selenium', function() {

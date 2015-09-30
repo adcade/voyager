@@ -1,240 +1,187 @@
-var shell = require('shelljs'),
-    util = require('util'),
+var util = require('util'),
     events = require('events'),
     fs = require('fs'),
     HTML = require('html-generate'),
-    jsTemplate = require('js-template');
+    writeson = require("writeson");
 
-var today = new Date(),
-    dd = today.getDate(),
-    mm = today.getMonth() + 1,
-    yyyy = today.getFullYear();
+var path = __dirname;
 
-    if (dd < 10) {
-        dd = '0' + dd
+function camelize (str) {
+    return str.replace(/(?:^\w|[A-Z]|\b\w)/g, function(letter, index) {
+        return index == 0 ? letter.toLowerCase() : letter.toUpperCase();
+    }).replace(/\s+/g, '');
+}
+
+function makeTestData (suite) {
+    var id = camelize(suite.parent + suite.title),
+        icon,
+        time;
+
+    if (suite.event == 'test:pass') {
+        icon = '<span style="color:#BFEB50">&#10004;</span>';
+        time = suite.duration + 'ms';
+    } if (suite.event == 'test:fail') {
+        icon = '<span style="color:#F51800">&#10008;</span>';
+        time = suite.duration + 'ms';
+    } if (suite.event == 'test:pending') {
+        icon = '<span style="color:#42A5F5">~</span>';
+        time = 'n/a';
     }
-    if (mm < 10) {
-        mm = '0' + mm
-    }
 
-    today = '_' + mm + '_' + dd + '_' + yyyy;
+    return {
+        tagName: 'tr',
+        children: [
+            {
+                tagName: 'td',
+                text: suite.title
+            },
+            {
+                tagName: 'td',
+                html: icon
+            },
+            {
+                tagName: 'td',
+                html: '<button data-target="' + id + '" class="btn modal-trigger">Source</button>'
+            },
+            {
+                tagName: 'td',
+                text: time
+            }
+        ]
+    }
+}
+
+function makeSourceData (suite) {
+    var id = camelize(suite.parent + suite.title);
+
+    return {
+        tagName: 'div',
+        attributes: {
+            id: id,
+            class: 'modal'
+        },
+        children: [
+            {
+                tagName: 'div',
+                attributes: {
+                    class: 'modal-content'
+                },
+                children: [
+                    {
+                        tagName: 'h3',
+                        text: suite.parent
+                    },
+                    {
+                        tagName: 'h4',
+                        text: suite.title
+                    },
+                    {
+                        tagName: 'p',
+                        text: JSON.stringify(suite)
+                    }
+                ]
+            },
+            {
+                tagName: 'div',
+                attributes: {
+                    class: 'modal-footer'
+                },
+                children: [
+                    {
+                        tagName: 'a',
+                        attributes: {
+                            href: '#',
+                            class: 'modal-action modal-close waves-effect waves-green btn-flat'
+                        },
+                        text: 'Close'
+                    }
+                ]
+            }
+        ]
+    }
+}
 
 var CustomReporter = function() {
-    var modalTemplate = __dirname + '/reports/views/source.html',
-        defaultTemplate = __dirname + '/reports/views/default.html',
-        indexFile = __dirname + '/reports/index.html',
-        templateHtml = fs.readFileSync(defaultTemplate, "utf8"),
-        modalHtml = fs.readFileSync(modalTemplate, "utf8");
+    var result = {};
+    var testTable  = {};
+    var modal  = {};
 
-    var modal = [],
-        table = [],
-        htmlObject,
-        sourceModal;
-
-    this.on('test:start', function(value, err) {
-        if (err) throw err;
-        console.log(value);
-        //return htmlObject = {
-        //    tagName: 'div',
-        //    attributes: {
-        //        id: 'voyage',
-        //        class: 'container'
-        //    },
-        //    children: [
-        //        {
-        //            tagName: 'div',
-        //            attributes: {
-        //                id: 'status',
-        //                class: 'row'
-        //            },
-        //            children: [
-        //                {
-        //                    tagName: 'div',
-        //                    attributes: {
-        //                        id: 'mission-control-header',
-        //                        class: 'col s12 center-align'
-        //                    },
-        //                    children: [
-        //                        {
-        //                            tagName: 'h1',
-        //                            attributes: {
-        //                                id: 'mission-control-logo',
-        //                                class: 'z-depth-5',
-        //                                style: 'font-weight:800;font-style:italic;text-transform:uppercase;text-color:#FFFFFF'
-        //                            },
-        //                            text: 'Voyager'
-        //                        }
-        //                    ]
-        //                }
-        //            ]
-        //        },
-        //        {
-        //            tagName: 'div',
-        //            attributes: {
-        //                id: 'mission-report',
-        //                class: 'container'
-        //            },
-        //            children: [
-        //                {
-        //                    tagName: 'table',
-        //                    attributes: {
-        //                        id: 'mission-report-table',
-        //                        class: 'responsive-table'
-        //                    },
-        //                    children: [
-        //                        {
-        //                            tagName: 'thead',
-        //                            attributes: {
-        //                                id: 'mission-report-table-header'
-        //                            },
-        //                            children: [
-        //                                {
-        //                                    tagName: 'tr',
-        //                                    children: [
-        //                                        {
-        //                                            tagName: 'th',
-        //                                            attributes: {
-        //                                                id: 'mission-report-table-mission'
-        //                                            },
-        //                                            text: 'Mission'
-        //                                        },
-        //                                        {
-        //                                            tagName: 'th',
-        //                                            attributes: {
-        //                                                id: 'mission-report-table-status'
-        //                                            },
-        //                                            text: 'Status'
-        //                                        },
-        //                                        {
-        //                                            tagName: 'th',
-        //                                            attributes: {
-        //                                                id: 'mission-report-table-console'
-        //                                            },
-        //                                            text: 'Console'
-        //                                        },
-        //                                        {
-        //                                            tagName: 'th',
-        //                                            attributes: {
-        //                                                id: 'mission-report-table-time'
-        //                                            },
-        //                                            text: 'Time'
-        //                                        }
-        //                                    ]
-        //                                }
-        //                            ]
-        //                        },
-        //                        {
-        //                            tagName: 'tbody',
-        //                            children: table
-        //                        }
-        //                    ]
-        //                }
-        //            ]
-        //
-        //        }
-        //    ]
-        //}
+    this.on('suite:start', function(suite) {
+        result[suite.title] = {};
+        testTable[suite.title] = [];
+        modal[suite.title] = [];
     });
 
-    this.on('test:pass', function(value) {
-        console.log(value);
-        //var mission = value.title,
-        //    time = value.duration.toString(),
-        //    id = 'modal' + value.pid;
-        //
-        //table.push({
-        //    tagName: 'tr',
-        //    children: [
-        //        {
-        //            tagName: 'td',
-        //            text: mission
-        //        },
-        //        {
-        //            tagName: 'td',
-        //            html: '<span style="color:#BFEB50">&#10004;</span>'
-        //        },
-        //        {
-        //            tagName: 'td',
-        //            html: '<button data-target="' + id + '" class="btn modal-trigger">Source</button>'
-        //        },
-        //        {
-        //            tagName: 'td',
-        //            text: time + 'ms'
-        //        }
-        //    ]
-        //});
-        //
-        //var sourceData = JSON.stringify(value);
-        //
-        //var modal = {
-        //    modalID: id,
-        //    modalHeader: '<h4>' + value.title + '</h4>',
-        //    modalBody: '<p>' + sourceData + '</p>'
-        //};
-        //
-        //return sourceModal = jsTemplate(modalHtml, modal);
+    this.on('test:pass', function(suite) {
+        if (!result[suite.parent].pass) {
+            result[suite.parent].pass = 0;
+        }
+        result[suite.parent].pass++;
+
+        for(var key in testTable) {
+            if (key == suite.parent) {
+                testTable[key].push(makeTestData(suite));
+                modal[key].push(makeSourceData(suite));
+            }
+        }
     });
 
-    this.on('test:fail', function(value) {
-        console.log(value);
-        //var mission = value.title,
-        //    time = value.duration.toString(),
-        //    id = 'modal' + value.pid;
-        //
-        //table.push({
-        //    tagName: 'tr',
-        //    children: [
-        //        {
-        //            tagName: 'td',
-        //            text: mission
-        //        },
-        //        {
-        //            tagName: 'td',
-        //            html: '<span style="color:#F51800">&#10008;</span>'
-        //        },
-        //        {
-        //            tagName: 'td',
-        //            html: '<button data-target="' + id + '" class="btn modal-trigger">Source</button>'
-        //        },
-        //        {
-        //            tagName: 'td',
-        //            text: time + 'ms'
-        //        }
-        //    ]
-        //});
-        //
-        //var sourceData = JSON.stringify(value);
-        //
-        //var modal = {
-        //    modalID: id,
-        //    modalHeader: '<h4>' + value.title + '</h4>',
-        //    modalBody: '<p>' + sourceData + '</p>'
-        //};
-        //
-        //return sourceModal = jsTemplate(modalHtml, modal);
+    this.on('test:fail', function(suite) {
+        if (!result[suite.parent].fail) {
+            result[suite.parent].fail = 0;
+        }
+        result[suite.parent].fail++;
+
+        for(var key in testTable) {
+            if (key == suite.parent) {
+                testTable[key].push(makeTestData(suite));
+                modal[key].push(makeSourceData(suite));
+            }
+        }
     });
 
-    this.on('test:end', function(value) {
-        console.log(value);
-        //var html = HTML.element(htmlObject);
-        //
-        //var data = {
-        //    title: 'Voyager | Mission Reports',
-        //    body: html,
-        //    modals: sourceModal
-        //};
-        //
-        //var result = jsTemplate(templateHtml, data);
-        //
-        //fs.writeFile(indexFile, result, function(err) {
-        //    if(err) {
-        //        return console.log(err);
-        //    }
-        //});
+    this.on('test:pending', function(suite) {
+        var icon = '<span style="color:#42A5F5">~</span>',
+            id = camelize(suite.parent + suite.title);
+
+        if (!result[suite.parent].pending) {
+            result[suite.parent].pending = 0;
+        }
+        result[suite.parent].pending++;
+
+        for(var key in testTable) {
+            if (key == suite.parent) {
+                testTable[key].push(makeTestData(suite));
+                modal[key].push(makeSourceData(suite));
+            }
+        }
     });
 
-    this.on('test:pending', function(value) {
-        console.log(value);
+    this.on('suite:end', function(value) {
+        // ..do something
+    });
+    var final = [];
+    this.on('end', function() {
+        for(var key in result) {
+            final.push({
+                "results": key,
+                "name": "Pass",
+                "# of tests": result[key].pass
+            });
+            final.push({
+                "results": key,
+                "name": "Fail",
+                "# of tests": result[key].fail
+            });
+            final.push({
+                "results": key,
+                "name": "Pending",
+                "# of tests": result[key].pending
+            });
+        }
+        writeson.sync(path + '/reports/data/data.json', final, "\t");
+        writeson.sync(path + '/reports/data/tests.json', testTable, "\t");
+        writeson.sync(path + '/reports/data/source.json', modal, "\t");
     });
 };
 
@@ -246,4 +193,4 @@ util.inherits(CustomReporter, events.EventEmitter);
 /**
  * Expose Custom Reporter
  */
-exports = module.exports = CustomReporter;
+module.exports = exports = CustomReporter;
